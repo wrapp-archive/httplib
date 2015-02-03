@@ -2,6 +2,7 @@ package gowrapp
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -72,11 +73,13 @@ func LogRequest(handler http.Handler, log *logrus.Logger) http.Handler {
 				"took":   time.Now().Sub(lw.started),
 				"size":   lw.size,
 			})
+			byteBodyMessage, _ := ioutil.ReadAll(r.Body)
+			bodyMessage := string(byteBodyMessage[:])
 			switch {
 			case lw.status < 400:
-				lm.Info(http.StatusText(lw.status))
+				lm.Info(http.StatusText(lw.status) + ": " + bodyMessage)
 			default:
-				lm.Error(http.StatusText(lw.status))
+				lm.Error(http.StatusText(lw.status) + ": " + bodyMessage)
 			}
 		})
 }
