@@ -9,6 +9,8 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
+var log *logrus.Logger
+
 type loggedResponse struct {
 	w       http.ResponseWriter
 	started time.Time
@@ -40,7 +42,7 @@ func (l *loggedResponse) WriteHeader(status int) {
 }
 
 // Recover is a middleware that recovers a handler from an error and logs the traceback
-func Recover(handler http.Handler, log *logrus.Logger) http.Handler {
+func Recover(handler http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
@@ -56,7 +58,7 @@ func Recover(handler http.Handler, log *logrus.Logger) http.Handler {
 }
 
 // LogRequest is a middleware that logs a request
-func LogRequest(handler http.Handler, log *logrus.Logger) http.Handler {
+func LogRequest(handler http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 
@@ -82,15 +84,20 @@ func LogRequest(handler http.Handler, log *logrus.Logger) http.Handler {
 }
 
 //wraps http.Error so we get the error message we return logged in the system
-func Error(w http.ResponseWriter, error string, code int, log *logrus.Logger) {
+func Error(w http.ResponseWriter, error string, code int) {
 	http.Error(w, error, code)
 	log.Error(error)
 }
 
+func SetLogger(mylog *logrus.Logger) {
+	log = mylog
+}
+
 // RunHTTP starts a webserver with Wrapp logging and panic recovery
 // The port number is fetched from the environment variable SERVICE_PORT
-func RunHTTP(serviceName string, log *logrus.Logger, h http.Handler) {
+func RunHTTP(serviceName string, mylog *logrus.Logger, h http.Handler) {
 	servicePort := GetenvDefault("SERVICE_PORT", "8080")
+	SetLogger(mylog)
 	log.Info(fmt.Sprintf("Starting %s on port %s", serviceName, servicePort))
-	log.Fatal(http.ListenAndServe(":"+servicePort, LogRequest(Recover(h, log), log)))
+	log.Fatal(http.ListenAndServe(":"+servicePort, LogRequest(Recover(h))))
 }
