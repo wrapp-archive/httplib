@@ -3,7 +3,8 @@ package gowrapp
 import (
 	"fmt"
 	"net/http"
-	"runtime/debug"
+	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -16,6 +17,7 @@ type loggedResponse struct {
 	started time.Time
 	status  int
 	size    int
+	body    string
 }
 
 func (l *loggedResponse) Flush() {
@@ -31,6 +33,7 @@ func (l *loggedResponse) Write(b []byte) (int, error) {
 		// The status will be StatusOK if WriteHeader has not been called yet
 		l.status = http.StatusOK
 	}
+	l.body += string(b)
 	size, err := l.w.Write(b)
 	l.size += size
 	return size, err
@@ -47,10 +50,20 @@ func Recover(handler http.Handler) http.Handler {
 		func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
+					var msg = "Unhandled panic: "
+					var buf [4096]byte
+					runtime.Stack(buf[:], true)
+					stack := buf[:runtime.Stack(buf[:], false)]
+					switch v := rec.(type) {
+					case string:
+						msg += v
+					default:
+						msg += reflect.TypeOf(v).String()
+					}
 					log.WithFields(logrus.Fields{
-						"traceback": string(debug.Stack()),
-					}).Error("Unhandled panic")
-					w.WriteHeader(http.StatusInternalServerError)
+						"traceback": string(stack),
+					}).Error(msg)
+					http.Error(w, fmt.Sprintf("%s \n%s", msg, stack), http.StatusInternalServerError)
 				}
 			}()
 			handler.ServeHTTP(w, r)
@@ -75,15 +88,15 @@ func LogRequest(handler http.Handler) http.Handler {
 				"size":   lw.size,
 			})
 			switch {
-			case lw.status < 400:
+			case lw.status < 500:
 				lm.Info(http.StatusText(lw.status))
 			default:
-				lm.Error(http.StatusText(lw.status))
+				lm.Error(fmt.Sprintf("%s\n%s", http.StatusText(lw.status), lw.body))
 			}
 		})
 }
 
-//wraps http.Error so we get the error message we return logged in the system
+// Error wraps http.Error so we get the error message we return logged in the system
 func Error(w http.ResponseWriter, error string, code int) {
 	http.Error(w, error, code)
 	log.Error(error)
