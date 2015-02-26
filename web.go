@@ -1,4 +1,4 @@
-package gowrapp
+package httplib
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/wrapp/env"
 )
 
 var log *logrus.Logger
@@ -108,7 +109,7 @@ func SetLogger(mylog *logrus.Logger) {
 // RunHTTP starts a webserver with Wrapp logging and panic recovery
 // The port number is fetched from the environment variable SERVICE_PORT
 func RunHTTP(serviceName string, mylog *logrus.Logger, h http.Handler) {
-	servicePort := GetenvDefault("SERVICE_PORT", "8080")
+	servicePort := env.Default("SERVICE_PORT", "8080")
 	SetLogger(mylog)
 	log.Info(fmt.Sprintf("Starting %s on port %s", serviceName, servicePort))
 	log.Fatal(http.ListenAndServe(":"+servicePort, LogRequest(Recover(h))))
