@@ -1,4 +1,4 @@
-package gowrapp
+package httplib
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/wrapp/env"
 )
 
 var log *logrus.Logger
@@ -71,6 +72,9 @@ func Recover(handler http.Handler) http.Handler {
 }
 
 // LogRequest is a middleware that logs a request
+// HTTP status  < 400 will be logged as Info
+// HTTP status >= 400 && < 500 will be logged as Info with the body as message
+// HTTP status >= 500 will be logged as Error with the body as message
 func LogRequest(handler http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
@@ -88,18 +92,14 @@ func LogRequest(handler http.Handler) http.Handler {
 				"size":   lw.size,
 			})
 			switch {
-			case lw.status < 500:
+			case lw.status < 400:
 				lm.Info(http.StatusText(lw.status))
+			case lw.status >= 400 && lw.status < 500:
+				lm.Info(fmt.Sprintf("%s\n%s", http.StatusText(lw.status), lw.body))
 			default:
 				lm.Error(fmt.Sprintf("%s\n%s", http.StatusText(lw.status), lw.body))
 			}
 		})
-}
-
-// Error wraps http.Error so we get the error message we return logged in the system
-func Error(w http.ResponseWriter, error string, code int) {
-	http.Error(w, error, code)
-	log.Error(error)
 }
 
 func SetLogger(mylog *logrus.Logger) {
@@ -109,7 +109,7 @@ func SetLogger(mylog *logrus.Logger) {
 // RunHTTP starts a webserver with Wrapp logging and panic recovery
 // The port number is fetched from the environment variable SERVICE_PORT
 func RunHTTP(serviceName string, mylog *logrus.Logger, h http.Handler) {
-	servicePort := GetenvDefault("SERVICE_PORT", "8080")
+	servicePort := env.Default("SERVICE_PORT", "8080")
 	SetLogger(mylog)
 	log.Info(fmt.Sprintf("Starting %s on port %s", serviceName, servicePort))
 	log.Fatal(http.ListenAndServe(":"+servicePort, LogRequest(Recover(h))))
