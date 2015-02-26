@@ -72,8 +72,8 @@ func Recover(handler http.Handler) http.Handler {
 }
 
 // LogRequest is a middleware that logs a request
-// HTTP status < 400 will be logged as Info
-// HTTP status <=400 <500 will be logged as Info with the body as message
+// HTTP status  < 400 will be logged as Info
+// HTTP status >= 400 && < 500 will be logged as Info with the body as message
 // HTTP status >= 500 will be logged as Error with the body as message
 func LogRequest(handler http.Handler) http.Handler {
 	return http.HandlerFunc(
