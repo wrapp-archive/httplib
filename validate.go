@@ -58,6 +58,7 @@ func ValidateJSONSchema(path string) func(http.Handler) http.Handler {
 					break
 				} else if err != nil {
 					http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+					return
 				}
 
 				objLoader := gojsonschema.NewGoLoader(obj)
