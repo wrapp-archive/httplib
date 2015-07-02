@@ -11,18 +11,16 @@ import (
 )
 
 type ValidationResult struct {
-	gojsonschema.Result
+	Valid  bool        `json:"valid"`
+	Errors interface{} `json:"errors"`
 }
 
-func (vr ValidationResult) MarshalJSON() ([]byte, error) {
-	var errors []string
+func ErrorValidationResult(vr *gojsonschema.Result) ValidationResult {
+	var errors []gojsonschema.ErrorDetails
 	for _, e := range vr.Errors() {
-		errors = append(errors, e.Description())
+		errors = append(errors, e.Details())
 	}
-	return json.Marshal(map[string]interface{}{
-		"valid":  vr.Valid(),
-		"errors": errors,
-	})
+	return ValidationResult{vr.Valid(), errors}
 }
 
 type nopCloser struct {
@@ -30,6 +28,10 @@ type nopCloser struct {
 }
 
 func (nopCloser) Close() error { return nil }
+
+type InvalidJSONError struct {
+	gojsonschema.ResultErrorFields
+}
 
 // ValidateJSONSchema returns a http middleware that validates the supplied
 // JSON schema. Will panic if the schema file can't be found and/or is invalid
@@ -52,13 +54,20 @@ func ValidateJSONSchema(path string) func(http.Handler) http.Handler {
 			bufReader := bytes.NewReader(buf)
 			dec := json.NewDecoder(bufReader)
 
+			var validationErrorCount int
+			var validationResults []ValidationResult
+
 			for {
 				var obj interface{}
 				if err := dec.Decode(&obj); err == io.EOF {
 					break
 				} else if err != nil {
-					http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
-					return
+					validationResults = append(validationResults,
+						ValidationResult{
+							false,
+							[]string{"Invalid JSON: " + err.Error()},
+						})
+					validationErrorCount++
 				}
 
 				objLoader := gojsonschema.NewGoLoader(obj)
@@ -67,13 +76,22 @@ func ValidateJSONSchema(path string) func(http.Handler) http.Handler {
 					http.Error(w, "Failed to validate: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
-				if !validationResult.Valid() {
-					validationResultJSON, _ := json.Marshal(ValidationResult{*validationResult})
-					http.Error(w, string(validationResultJSON), http.StatusBadRequest)
-					return
+				if validationResult.Valid() != true {
+					validationErrorCount++
 				}
+				validationResults = append(validationResults,
+					ErrorValidationResult(validationResult),
+				)
 			}
 
+			if validationErrorCount > 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				for i := range validationResults {
+					o, _ := json.Marshal(validationResults[i])
+					w.Write(o)
+				}
+				return
+			}
 			r.Body = nopCloser{bytes.NewReader(buf)}
 			next.ServeHTTP(w, r)
 		})
