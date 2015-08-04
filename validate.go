@@ -89,7 +89,9 @@ func ValidateJSONSchema(path string) func(http.Handler) http.Handler {
 				for i := range validationResults {
 					o, _ := json.Marshal(validationResults[i])
 					w.Write(o)
+					w.Write([]byte("\n"))
 				}
+
 				return
 			}
 			r.Body = nopCloser{bytes.NewReader(buf)}
