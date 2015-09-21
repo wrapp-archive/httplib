@@ -11,8 +11,9 @@ import (
 )
 
 type ValidationResult struct {
-	Valid  bool        `json:"valid"`
-	Errors interface{} `json:"errors"`
+	Valid       bool        `json:"valid"`
+	Errors      interface{} `json:"errors"`
+	ObjectIndex *int        `json:"item,omitempty"`
 }
 
 func ErrorValidationResult(vr *gojsonschema.Result) ValidationResult {
@@ -20,7 +21,7 @@ func ErrorValidationResult(vr *gojsonschema.Result) ValidationResult {
 	for _, e := range vr.Errors() {
 		errors = append(errors, e.Details())
 	}
-	return ValidationResult{vr.Valid(), errors}
+	return ValidationResult{Valid: vr.Valid(), Errors: errors}
 }
 
 type nopCloser struct {
@@ -58,16 +59,20 @@ func ValidateJSONSchema(path string) func(http.Handler) http.Handler {
 			var validationResults []ValidationResult
 
 			for {
+
 				var obj interface{}
 				if err := dec.Decode(&obj); err == io.EOF {
 					break
 				} else if err != nil {
 					validationResults = append(validationResults,
 						ValidationResult{
-							false,
-							[]string{"Invalid JSON: " + err.Error()},
+							Valid:  false,
+							Errors: []string{"Invalid JSON: " + err.Error()},
 						})
 					validationErrorCount++
+					// When reach an invalid JSON, we can't proceed since we can't
+					// segment subsequent objects correctly
+					break
 				}
 
 				objLoader := gojsonschema.NewGoLoader(obj)
@@ -87,7 +92,9 @@ func ValidateJSONSchema(path string) func(http.Handler) http.Handler {
 			if validationErrorCount > 0 {
 				w.WriteHeader(http.StatusBadRequest)
 				for i := range validationResults {
-					o, _ := json.Marshal(validationResults[i])
+					vr := validationResults[i]
+					vr.ObjectIndex = &i
+					o, _ := json.Marshal(vr)
 					w.Write(o)
 					w.Write([]byte("\n"))
 				}
