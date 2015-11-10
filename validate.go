@@ -48,7 +48,7 @@ func ValidateJSONSchema(path string) func(http.Handler) http.Handler {
 			}
 			validationResult, err := schema.Validate(gojsonschema.NewStringLoader(string(buf)))
 			if err != nil {
-				http.Error(w, "Failed to validate: "+err.Error(), http.StatusInternalServerError)
+				http.Error(w, "Failed to validate: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 			if !validationResult.Valid() {
