@@ -7,11 +7,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/wrapp/env"
 )
-
-var log *logrus.Logger
 
 type loggedResponse struct {
 	w       http.ResponseWriter
@@ -61,7 +59,7 @@ func Recover(handler http.Handler) http.Handler {
 					default:
 						msg += reflect.TypeOf(v).String()
 					}
-					log.WithFields(logrus.Fields{
+					log.WithFields(log.Fields{
 						"traceback": string(stack),
 					}).Error(msg)
 					http.Error(w, fmt.Sprintf("%s \n%s", msg, stack), http.StatusInternalServerError)
@@ -82,7 +80,7 @@ func LogRequest(handler http.Handler) http.Handler {
 			lw := loggedResponse{w: w, started: time.Now()}
 			handler.ServeHTTP(&lw, r)
 
-			lm := log.WithFields(logrus.Fields{
+			lm := log.WithFields(log.Fields{
 				"status": lw.status,
 				"remote": r.RemoteAddr,
 				"method": r.Method,
@@ -102,15 +100,11 @@ func LogRequest(handler http.Handler) http.Handler {
 		})
 }
 
-func SetLogger(mylog *logrus.Logger) {
-	log = mylog
-}
-
 // RunHTTP starts a webserver with Wrapp logging and panic recovery
 // The port number is fetched from the environment variable SERVICE_PORT
-func RunHTTP(serviceName string, mylog *logrus.Logger, h http.Handler) {
+// FIXME: mylog parameter kept for legacy reasons, it should be dropped
+func RunHTTP(serviceName string, mylog *log.Logger, h http.Handler) {
 	servicePort := env.Default("SERVICE_PORT", "8080")
-	SetLogger(mylog)
 	log.Info(fmt.Sprintf("Starting %s on port %s", serviceName, servicePort))
 	log.Fatal(http.ListenAndServe(":"+servicePort, LogRequest(Recover(h))))
 }
