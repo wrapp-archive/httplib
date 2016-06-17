@@ -11,6 +11,8 @@ import (
 	"github.com/wrapp/env"
 )
 
+const MAXSIZE = 32 * 1024
+
 type loggedResponse struct {
 	w       http.ResponseWriter
 	started time.Time
@@ -32,7 +34,11 @@ func (l *loggedResponse) Write(b []byte) (int, error) {
 		// The status will be StatusOK if WriteHeader has not been called yet
 		l.status = http.StatusOK
 	}
-	l.body += string(b)
+
+	if l.size < MAXSIZE {
+		l.body += string(b)
+	}
+
 	size, err := l.w.Write(b)
 	l.size += size
 	return size, err
